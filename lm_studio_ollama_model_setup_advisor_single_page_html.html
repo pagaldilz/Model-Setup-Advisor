@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LM Studio + Ollama Model Setup Advisor</title>
+  <style>
+    :root{
+      --bg:#0b1221; --card:#121a2e; --muted:#7f8aa3; --fg:#e7efff; --accent:#8bd3ff; --ok:#6ee7a3; --warn:#ffd166;
+    }
+    body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg);} 
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px 40px;}
+    .h1{font-size:28px;font-weight:800;margin:0 0 6px;}
+    .sub{color:var(--muted);margin:0 0 18px;}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.0));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px 16px 8px;} 
+    .grid{display:grid;gap:12px;}
+    @media(min-width:960px){.grid-2{grid-template-columns:1.1fr .9fr}}
+    label{display:block;font-weight:650;margin:8px 0 6px;color:#cfe0ff}
+    input,select{width:100%;box-sizing:border-box;background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;color:var(--fg);} 
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{cursor:pointer;border:1px solid rgba(255,255,255,.14);background:linear-gradient(180deg,#26314f,#1a2441);color:#eaf2ff;padding:9px 12px;border-radius:12px;font-weight:700}
+    .btn:hover{border-color:rgba(255,255,255,.28)}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#1e2b4e;border:1px solid rgba(255,255,255,.12);color:#b8c6e8;font-size:12px;margin-right:6px}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    thead th{font-size:12px;text-transform:uppercase;color:#9fb0d1;letter-spacing:.12em;text-align:left;padding:0 10px}
+    tbody td{background:var(--card);border:1px solid rgba(255,255,255,.12);padding:10px;border-left:none;border-right:none}
+    tbody tr td:first-child{border-left:1px solid rgba(255,255,255,.12);border-radius:12px 0 0 12px}
+    tbody tr td:last-child{border-right:1px solid rgba(255,255,255,.12);border-radius:0 12px 12px 0}
+    .muted{color:var(--muted)}
+    .green{color:var(--ok)}
+    .yellow{color:var(--warn)}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+    .small{font-size:12px;color:#9fb0d1}
+    .folder-display{background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;min-height:24px;}
+    .folder-item{display:inline-block;background:#1e2b4e;border-radius:8px;padding:2px 8px;margin:2px;font-size:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="h1">LM Studio + Ollama Model Setup Advisor</h1>
+    <p class="sub">Scan your local <b>LM Studio</b> and <b>Ollama</b> model folders, detect model sizes, and get an <b>automatic GPU/CPU split suggestion</b>.</p>
+
+    <div class="grid grid-2">
+      <section class="card">
+        <h3>1) Your Hardware</h3>
+        <div class="row">
+          <div style="flex:1">
+            <label>GPU VRAM (GB)</label>
+            <input id="vram" type="number" min="2" step="1" value="16" />
+          </div>
+          <div style="flex:1">
+            <label>System RAM (GB)</label>
+            <input id="ram" type="number" min="4" step="1" value="64" />
+          </div>
+        </div>
+
+        <h3>2) Pick model folders</h3>
+        <div>
+          <label>LM Studio models folder:</label>
+          <div class="row">
+            <div class="folder-display" id="lmFolders">
+              <span class="muted">No folders selected</span>
+            </div>
+            <button id="pickLm" class="btn">Select Folder</button>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <label>Ollama models folder:</label>
+          <div class="row">
+            <div class="folder-display" id="olFolders">
+              <span class="muted">No folders selected</span>
+            </div>
+            <button id="pickOllama" class="btn">Select Folder</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button id="rescan" class="btn">Rescan All Folders</button>
+        </div>
+        <p class="small muted" style="margin-top:10px">
+          <b>Important:</b> This uses browser's File System Access API. 
+          <span class="warn">No data leaves your device</span> - all scanning happens locally.
+        </p>
+      </section>
+
+      <section class="card">
+        <h3>How suggestions work</h3>
+        <ul class="small" style="padding-left:18px;margin:8px 0">
+          <li>Scans <b>recursively</b> for <code>.gguf</code> files</li>
+          <li>Estimates layers from model name (7B, 13B, etc.)</li>
+          <li>Calculates GPU layers to use ~80% of your VRAM</li>
+          <li><span class="green">Green</span> = fits entirely in VRAM</li>
+          <li><span class="yellow">Yellow</span> = partial GPU offload</li>
+        </ul>
+        <h4 style="margin:14px 0 6px">Ollama Note</h4>
+        <p class="small muted">
+          Ollama stores models in <code>blobs/</code> directory. Select the <b>parent folder</b> of <code>blobs</code> (usually <code>.ollama</code>).
+        </p>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between">
+        <h3>Discovered Models</h3>
+        <div>
+          <span class="tag" id="lmCount">LM Studio: 0</span>
+          <span class="tag" id="olCount">Ollama: 0</span>
+        </div>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead><tr><th>Model</th><th>Source</th><th>Quant</th><th>Size</th><th>Est. Layers</th><th>Suggested GPU Layers</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+<script>
+  // DOM Elements
+  const $ = (sel) => document.querySelector(sel);
+  const rows = $('#rows');
+  const lmCount = $('#lmCount');
+  const olCount = $('#olCount');
+  const lmFolders = $('#lmFolders');
+  const olFolders = $('#olFolders');
+
+  // State Management
+  let models = [];
+  let lmHandles = [];  // Stores {handle, name}
+  let olHandles = [];  // Stores {handle, name}
+
+  // Layer estimation based on model name
+  function estimateLayers(name) {
+    const l = name.toLowerCase();
+    if (l.includes('7b') || l.includes('8b')) return 32;
+    if (l.includes('13b')) return 40;
+    if (l.includes('33b') || l.includes('34b')) return 60;
+    if (l.includes('70b')) return 80;
+    return 48; // Default for unknown sizes
+  }
+
+  // Format file size
+  function human(bytes) {
+    const gb = bytes / (1024 ** 3);
+    if (gb >= 1) return gb.toFixed(2) + ' GB';
+    const mb = bytes / (1024 ** 2);
+    if (mb >= 1) return mb.toFixed(1) + ' MB';
+    return (bytes / 1024).toFixed(0) + ' KB';
+  }
+
+  // Extract quantization from filename
+  function parseQuant(name) {
+    const m = name.match(/q[0-9]+[a-z_\-]*/i);
+    return m ? m[0].toUpperCase() : '—';
+  }
+
+  // Recursive directory scanner
+  async function scanDirectory(handle, source) {
+    const models = [];
+    
+    async function scanRecursive(entryHandle, path = '') {
+      if (entryHandle.kind === 'file') {
+        const file = await entryHandle.getFile();
+        if (file.name.toLowerCase().endsWith('.gguf')) {
+          models.push({
+            name: file.name,
+            sizeBytes: file.size,
+            source,
+            path: path + file.name
+          });
+        }
+      } 
+      else if (entryHandle.kind === 'directory') {
+        for await (const [name, childHandle] of entryHandle.entries()) {
+          await scanRecursive(childHandle, path + name + '/');
+        }
+      }
+    }
+    
+    await scanRecursive(handle);
+    return models;
+  }
+
+  // Update folder display UI
+  function updateFolderDisplay() {
+    lmFolders.innerHTML = lmHandles.length 
+      ? lmHandles.map(h => `<span class="folder-item">${h.name}</span>`).join('')
+      : '<span class="muted">No folders selected</span>';
+      
+    olFolders.innerHTML = olHandles.length 
+      ? olHandles.map(h => `<span class="folder-item">${h.name}</span>`).join('')
+      : '<span class="muted">No folders selected</span>';
+  }
+
+  // Recompute GPU layer suggestions
+  function recompute() {
+    const vramGB = Number($('#vram').value) || 16;
+    const vramBudget = vramGB * 0.8; // 80% of VRAM
+    
+    rows.innerHTML = '';
+    models.forEach(m => {
+      const totalLayers = estimateLayers(m.name);
+      const sizeGB = m.sizeBytes / (1024 ** 3);
+      const perLayer = sizeGB / totalLayers;
+      const gpuLayers = Math.max(0, Math.floor(vramBudget / Math.max(0.001, perLayer)));
+      
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td title="${m.path}" class="mono">${m.name}</td>
+        <td>${m.source}</td>
+        <td>${parseQuant(m.name)}</td>
+        <td>${human(m.sizeBytes)}</td>
+        <td>${totalLayers}</td>
+        <td><b class="${gpuLayers >= totalLayers ? 'green' : 'yellow'}">
+          ${gpuLayers} (${Math.round((gpuLayers/totalLayers)*100)}%)
+        </b></td>
+      `;
+      rows.appendChild(tr);
+    });
+    
+    lmCount.textContent = 'LM Studio: ' + models.filter(m => m.source === 'LM Studio').length;
+    olCount.textContent = 'Ollama: ' + models.filter(m => m.source === 'Ollama').length;
+  }
+
+  // Scan a directory handle
+  async function scanHandle(handle, source, name) {
+    try {
+      const newModels = await scanDirectory(handle, source);
+      models = models.filter(m => 
+        !(m.source === source && m.path.startsWith(name + '/'))
+      );
+      models = [...models, ...newModels];
+      recompute();
+    } catch (e) {
+      console.error(`Error scanning ${name}:`, e);
+    }
+  }
+
+  // Handle folder selection
+  async function selectFolder(source) {
+    if (!('showDirectoryPicker' in window)) {
+      alert('Directory picker requires Chrome/Edge. Please update your browser.');
+      return;
+    }
+
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      
+      // Store handle with friendly name
+      const folderInfo = { handle, name: handle.name };
+      
+      if (source === 'LM Studio') {
+        lmHandles.push(folderInfo);
+      } else {
+        olHandles.push(folderInfo);
+      }
+      
+      updateFolderDisplay();
+      await scanHandle(handle, source, handle.name);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('Folder selection error:', e);
+      }
+    }
+  }
+
+  // Rescan all selected folders
+  async function rescanAll() {
+    models = [];
+    
+    // Scan LM Studio folders
+    for (const {handle, name} of lmHandles) {
+      await scanHandle(handle, 'LM Studio', name);
+    }
+    
+    // Scan Ollama folders
+    for (const {handle, name} of olHandles) {
+      await scanHandle(handle, 'Ollama', name);
+    }
+    
+    recompute();
+  }
+
+  // Initialize UI
+  updateFolderDisplay();
+  
+  // Event Listeners
+  $('#pickLm').addEventListener('click', () => selectFolder('LM Studio'));
+  $('#pickOllama').addEventListener('click', () => selectFolder('Ollama'));
+  $('#rescan').addEventListener('click', rescanAll);
+  $('#vram').addEventListener('change', recompute);
+  $('#ram').addEventListener('change', recompute); // RAM not used but kept for future
+
+  // Show browser compatibility warning
+  if (!('showDirectoryPicker' in window)) {
+    const warning = document.createElement('div');
+    warning.style = `
+      background: #b91c1c33; 
+      border: 1px solid #ef4444; 
+      border-radius: 8px; 
+      padding: 12px; 
+      margin-top: 10px;
+      color: #fca5a5;
+    `;
+    warning.innerHTML = `
+      <b>Browser Warning:</b> File System Access API not supported.<br>
+      This tool requires <b>Chrome 86+</b> or <b>Edge 86+</b> to scan folders.
+    `;
+    $('.grid-2').after(warning);
+  }
+</script>
+</body>
+</html>
