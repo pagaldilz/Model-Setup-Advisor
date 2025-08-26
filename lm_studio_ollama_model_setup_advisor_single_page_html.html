@@ -31,8 +31,11 @@
     .yellow{color:var(--warn)}
     .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
     .small{font-size:12px;color:#9fb0d1}
-    .folder-display{background:var(--card);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 12px;min-height:24px;}
+    .folder-display{background:var(--card);border:1px solid rgba(255,255,.12);border-radius:12px;padding:10px 12px;min-height:24px;}
     .folder-item{display:inline-block;background:#1e2b4e;border-radius:8px;padding:2px 8px;margin:2px;font-size:12px;}
+    thead th { cursor: pointer; user-select: none; position: relative; }
+    thead th.sort-asc::after { content: " ↑"; }
+    thead th.sort-desc::after { content: " ↓"; }
   </style>
 </head>
 <body>
@@ -108,7 +111,7 @@
       </div>
       <div style="overflow:auto">
         <table>
-          <thead><tr><th>Model</th><th>Source</th><th>Quant</th><th>Size</th><th>Est. Layers</th><th>Suggested GPU Layers</th></tr></thead>
+          <thead><tr><th id="sort-name">Model</th><th id="sort-source">Source</th><th id="sort-quant">Quant</th><th id="sort-size">Size</th><th id="sort-layers">Est. Layers</th><th id="sort-gpu">Suggested GPU Layers</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -128,6 +131,60 @@
   let models = [];
   let lmHandles = [];  // Stores {handle, name}
   let olHandles = [];  // Stores {handle, name}
+  let sortColumn = 'name';  // Default sort column
+  let sortDirection = 'asc';  // Default sort direction
+
+  // Sorting functions
+  function sortModels(modelsArray, column, direction) {
+    return [...modelsArray].sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (column) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'source':
+          aVal = a.source.toLowerCase();
+          bVal = b.source.toLowerCase();
+          break;
+        case 'quant':
+          aVal = parseQuant(a.name);
+          bVal = parseQuant(b.name);
+          break;
+        case 'size':
+          aVal = a.sizeBytes;
+          bVal = b.sizeBytes;
+          break;
+        case 'layers':
+          aVal = estimateLayers(a.name);
+          bVal = estimateLayers(b.name);
+          break;
+        case 'gpu':
+          const aTotalLayers = estimateLayers(a.name);
+          const bTotalLayers = estimateLayers(b.name);
+          const aSizeGB = a.sizeBytes / (1024 ** 3);
+          const bSizeGB = b.sizeBytes / (1024 ** 3);
+          const aPerLayer = aSizeGB / aTotalLayers;
+          const bPerLayer = bSizeGB / bTotalLayers;
+          const vramGB = Number($('#vram').value) || 16;
+          const vramBudget = vramGB * 0.8;
+          const aGpuLayers = Math.max(0, Math.floor(vramBudget / Math.max(0.001, aPerLayer)));
+          const bGpuLayers = Math.max(0, Math.floor(vramBudget / Math.max(0.001, bPerLayer)));
+          aVal = aGpuLayers;
+          bVal = bGpuLayers;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      } else {
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+    });
+  }
 
   // Layer estimation based on model name
   function estimateLayers(name) {
@@ -197,8 +254,11 @@
     const vramGB = Number($('#vram').value) || 16;
     const vramBudget = vramGB * 0.8; // 80% of VRAM
     
+    // Sort models based on current sort column and direction
+    const sortedModels = sortModels(models, sortColumn, sortDirection);
+    
     rows.innerHTML = '';
-    models.forEach(m => {
+    sortedModels.forEach(m => {
       const totalLayers = estimateLayers(m.name);
       const sizeGB = m.sizeBytes / (1024 ** 3);
       const perLayer = sizeGB / totalLayers;
@@ -283,6 +343,64 @@
 
   // Initialize UI
   updateFolderDisplay();
+  updateSortIndicators(); // Initialize sort indicators
+  
+  // Update sort indicators
+  function updateSortIndicators() {
+    // Clear all indicators
+    document.querySelectorAll('thead th').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+    });
+    
+    // Add indicator to current sort column
+    const currentSortHeader = document.getElementById(`sort-${sortColumn}`);
+    if (currentSortHeader) {
+      currentSortHeader.classList.add(sortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  }
+  
+  // Header click handlers
+  document.getElementById('sort-name').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'name' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'name';
+    updateSortIndicators();
+    recompute();
+  });
+  
+  document.getElementById('sort-source').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'source' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'source';
+    updateSortIndicators();
+    recompute();
+  });
+  
+  document.getElementById('sort-quant').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'quant' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'quant';
+    updateSortIndicators();
+    recompute();
+  });
+  
+  document.getElementById('sort-size').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'size' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'size';
+    updateSortIndicators();
+    recompute();
+  });
+  
+  document.getElementById('sort-layers').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'layers' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'layers';
+    updateSortIndicators();
+    recompute();
+  });
+  
+  document.getElementById('sort-gpu').addEventListener('click', () => {
+    sortDirection = (sortColumn === 'gpu' && sortDirection === 'asc') ? 'desc' : 'asc';
+    sortColumn = 'gpu';
+    updateSortIndicators();
+    recompute();
+  });
   
   // Event Listeners
   $('#pickLm').addEventListener('click', () => selectFolder('LM Studio'));

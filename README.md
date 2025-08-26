@@ -7,6 +7,7 @@ A single-page web application that helps you optimize your local AI model setup 
 - **Local Scanning**: Recursively scans your LM Studio and Ollama model directories for `.gguf` files
 - **Hardware-Aware Suggestions**: Calculates optimal GPU layer offloading based on your VRAM capacity
 - **Model Analysis**: Extracts quantization information and estimates model layers from filenames
+- **Sortable Tables**: Click on any column header to sort the model list (ascending/descending)
 - **Privacy Focused**: All scanning happens locally in your browser - no data is uploaded to any server
 - **Cross-Platform**: Works with both LM Studio and Ollama model formats
 
@@ -20,6 +21,20 @@ A single-page web application that helps you optimize your local AI model setup 
 6. **Visual Feedback**: 
    - Green indicators for models that fit entirely in VRAM
    - Yellow indicators for models requiring partial GPU offloading
+## Sorting Functionality
+
+The model table now supports sorting by any column:
+- **Model Name**: Sort alphabetically by model file name
+- **Source**: Group LM Studio and Ollama models
+- **Quantization**: Sort by quantization type (e.g., Q4, Q5, Q8)
+- **Size**: Sort by file size (numerical order)
+- **Est. Layers**: Sort by estimated model layers
+- **Suggested GPU Layers**: Sort by recommended GPU layer count
+
+To use sorting:
+1. Click on any column header to sort in ascending order (↑ indicator appears)
+2. Click the same header again to sort in descending order (↓ indicator appears)
+3. Click a different header to sort by that column instead
 
 ## Usage Instructions
 
